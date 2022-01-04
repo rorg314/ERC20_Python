@@ -1,15 +1,14 @@
 from collections import defaultdict
+import string
+import random
 
 
 
 
-# Format of address GUID 
-#   - incremental = incremental integers
-#   - random8 = random 8 digit integer
-ADDRESS_ID_FORMATS = ["incremental", "random8"]
+
 
 class ERC20Token():
-    def __init__(self, name, symbol, decimals=18, quanta='_wei', totalSupply=0, addressIdFormat='incremental'):
+    def __init__(self, name, symbol, decimals=18, quanta='_wei', totalSupply=0, addressLength=8):
         # Token name
         self.name = name
         # Token symbol
@@ -28,18 +27,14 @@ class ERC20Token():
         self.decimals = decimals
 
         # -------- ADDRESSES ------- #
-        # Address ID will be of the form type_id
-        # Eg wallet_21439 is the address for the wallet with GUID 21439
-        # Eg contract_21 is the contract with GUID 21 
+        # Address will be hex string of length addressLength 
+        self.addressLength = addressLength
 
-        # Address identifier format
-        self.addressIdFormat = addressIdFormat
-        
-        # List of all addresses
+        # List of all created addresses
         self.allAddresses = list()
 
-        # Dict of all address types -> list of all addresses of that type
-        self.allAddressTypeDict = defaultdict(list)
+        # Dict of address string -> address object
+        self.allAddressDict = defaultdict(list)
 
         
     # ======================================================== #
@@ -71,19 +66,19 @@ class ERC20Token():
     
 # Class defining a single address object
 class Address():
-    def __init__(self, token:ERC20Token, id, type, balance=0, contract=None):
+    def __init__(self, token:ERC20Token, address, type, balance=0, contract=None):
         # Token using this address
         self.token = token
         
         # Address type string
         self.type = type
-        # Address ID for this wallet
-        self.Id = id
+        # Address ID (hex string with token.addressLength #characters)
+        self.id = address
         # Address as string (format type_id)
-        self.address = self.type + "_" + self.Id
+        self.addressStr = self.type + "_" + self.id
         
-        # Add the wallet to the addressObjectDict
-        self.token.addressObjectDict[self.address] = self
+        # Add this address object to the allAddressDict
+        self.token.allAddressDict[self.id] = self
 
         if(type == "Wallet"):
             # Token balance at this address
@@ -95,9 +90,24 @@ class Address():
             self.balance = None
 
     def __repr__(self) -> str:
-        return self.address
+        return self.addressStr
 
 
 
 
+
+# ======================================================== #
+# ==================== HELPER METHODS ==================== #
+# ======================================================== #
+
+
+# Used to generate random address IDs 
+def GenerateRandomAddressID(token:ERC20Token):
+    id = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(token.address))
+    # Ensure id has not already been created
+    if(id in token.allAddresses):
+        # Generate a new random address
+        GenerateRandomAddressID(token)
+    else:
+        return id
 
