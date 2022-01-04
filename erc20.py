@@ -27,7 +27,6 @@ class ERC20Token():
         # Number of token decimals 
         self.decimals = decimals
 
-
         # -------- ADDRESSES ------- #
         # Address ID will be of the form type_id
         # Eg wallet_21439 is the address for the wallet with GUID 21439
@@ -36,8 +35,11 @@ class ERC20Token():
         # Address identifier format
         self.addressIdFormat = addressIdFormat
         
-        # Dict of all address types -> list of all addresses
-        self.allAddresses = defaultdict(list)
+        # List of all addresses
+        self.allAddresses = list()
+
+        # Dict of all address types -> list of all addresses of that type
+        self.allAddressTypeDict = defaultdict(list)
 
         
     # ======================================================== #
@@ -54,20 +56,48 @@ class ERC20Token():
     def GetSymbolAmount(self, quantaAmount):
         return quantaAmount * 10 ** (-self.decimals)
 
-    
 
-# Class defining a single wallet address
-class WalletAddress():
-    def __init__(self, token:ERC20Token, Id, balance=0):
-        # Token held at in this wallet
+    # ======================================================== #
+    # ==================== ERC-20 PROTOCOL =================== #
+    # ======================================================== #
+
+    def Transfer(self, senderAddress, receiverAddress, quantisedAmount:int): 
+        senderWallet = self.addressObjectDict[senderAddress]
+        receiverWallet = self.addressObjectDict[receiverAddress]
+        if(senderWallet.type != "Wallet" or receiverWallet.type != "Wallet"):
+            print("Sender or Receiver was not a wallet! Sender type: " + senderWallet.type)
+        
+
+    
+# Class defining a single address object
+class Address():
+    def __init__(self, token:ERC20Token, id, type, balance=0, contract=None):
+        # Token using this address
         self.token = token
         
         # Address type string
-        self.type = "Wallet"
+        self.type = type
         # Address ID for this wallet
-        self.Id = Id
+        self.Id = id
         # Address as string (format type_id)
         self.address = self.type + "_" + self.Id
         
-        # Token balance at this address
-        self.balance = balance
+        # Add the wallet to the addressObjectDict
+        self.token.addressObjectDict[self.address] = self
+
+        if(type == "Wallet"):
+            # Token balance at this address
+            self.balance = balance
+            self.contract = None
+        if(type == "Contract"):
+            # Contract (method or class) at this address
+            self.contract = contract
+            self.balance = None
+
+    def __repr__(self) -> str:
+        return self.address
+
+
+
+
+
