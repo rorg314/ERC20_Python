@@ -1,6 +1,8 @@
 from collections import defaultdict
 import string
 import random
+import time
+import datetime
 
 
 
@@ -42,6 +44,16 @@ class ERC20Token():
         # Init minter with starting total supply
         self.minter.balance = self.totalSupply
 
+        # ------ TRANSACTIONS ------ #
+        # Ensure transaction Id length is separate from address length
+        self.transactionIdLength = addressLength + 4
+
+        # List of all transactions
+        self.allTransactions = list()
+
+        # Dict of transactionId -> transaction
+        self.transactionIdDict = dict()
+
         
     # ======================================================== #
     # ===================== TOKEN METHODS ==================== #
@@ -57,31 +69,10 @@ class ERC20Token():
     def GetSymbolAmount(self, quantaAmount):
         return quantaAmount * 10 ** (-self.decimals)
 
-    
 
 
-    # ======================================================== #
-    # ==================== ERC-20 PROTOCOL =================== #
-    # ======================================================== #
 
-    def Transfer(self, senderAddress, receiverAddress, quantisedAmount:int): 
-        # Get the address objects for sender and receiver
-        try:
-            sender = GetAddressObject(self, senderAddress)
-            receiver = GetAddressObject(self, senderAddress)
-            # Ensure both addresses are wallets
-            if(sender.type.lower().strip() != "wallet" or receiver.type.lower().strip() != "wallet"):
-                print("Sender or Receiver was not a wallet, aborting! \n Sender type: " + sender.type + "\n Receiver type: " + receiver.type)
-                return
-        except:
-            print("Could not get address objects! \n Sender: " + senderAddress + "\nReceiver: " + receiverAddress)
-        
-        # Perform the transfer
-        sender.balance -= quantisedAmount
-        receiver.balance += quantisedAmount
-        
 
-    
 # Class defining a single address object
 class Address():
     def __init__(self, token:ERC20Token, addressId, type, contract=None, initBalance=0):
@@ -95,6 +86,8 @@ class Address():
         # Address as string (format type_id)
         self.addressStr = self.type + "_" + self.id
         
+        # Add to list of all addresses
+        self.token.allAddresses.append(self)
         # Add this address object to the allAddressDict
         self.token.allAddressDict[self.id] = self
         
@@ -103,13 +96,107 @@ class Address():
         if(initBalance == 0):
             self.balance = 0
         else:
-            token.Transfer(token.minter, self, initBalance)
+            RequestTransaction(token.minter, self, initBalance)
 
         # If this address contains a contract (otherwise contract=None)
         self.contract = contract
 
     def __repr__(self) -> str:
         return self.addressStr
+
+# Class defining a single transaction (these are effectively the blocks) - everything must be hashable  
+class Transaction():
+    def __init__(self, token:ERC20Token, sender:Address, receiver:Address, qntAmount):
+        # Generate a random transaction ID
+        self.transactionId = GenerateRandomTransactionID(token)
+        # Sender and receiver addresses
+        self.senderAddressId = sender.id
+        self.receiverAddressId = receiver.id
+        
+        # Sender and receiver initial balances
+        self.senderInitBalance = sender.balance
+        self.receiverInitBalanace = receiver.balance
+        
+        # Requested transacted amount (quantised units)
+        self.transactedQntAmount = qntAmount
+        # Transacted amount (symbol units)
+        self.transactedSymAmount = token.GetSymbolAmount(qntAmount)
+        # Strings for quantised and symbol amounts 
+        self.symbol = token.symbol
+        self.quanta = token.quanta
+    
+        
+        # Transaction timestamp
+        self.transactionTimeUnix = time.time()
+        self.timestamp = datetime.datetime.utcfromtimestamp(self.transactionTimeUnix).strftime('%Y-%m-%d %H:%M:%S')
+
+        # Has transaction been verified yet?
+        self.verified = False
+
+    def __repr__(self) -> str:
+        return "Transaction: " + str(self.transactionId) + " ----- Amount: " + str(self.transactedSymAmount) + " " + self.symbol + " ----- Time: " + str(self.timestamp)
+
+
+
+# ======================================================== #
+# ==================== ERC-20 PROTOCOL =================== #
+# ======================================================== #
+
+def RequestTransaction(token:ERC20Token, senderAddress, receiverAddress, quantisedAmount:int):
+    # Get the address objects for sender and receiver
+    
+    try:
+        sender = GetWalletFromAddress(token, senderAddress)
+        receiver = GetWalletFromAddress(token, receiverAddress)
+        
+    except:
+        print("Could not get address objects! \n Sender: " + str(senderAddress) + "\nReceiver: " + str(receiverAddress))
+        return 
+
+    try: 
+        # Create the unverified transaction
+        transaction = Transaction(token, sender, receiver, quantisedAmount)
+        # Send the transaction for verification
+        VerifyTransaction(token, transaction)
+    except:
+        print("Could not create the transaction!\n Sender: " + str(senderAddress) + "\nReceiver: " + str(receiverAddress) )
+    
+    
+
+    
+
+
+# Verify the requested transaction - simple implementation here checks if sender has enough balance - more complex implementations possible eg checking sender signed messages to prove wallet ownership 
+def VerifyTransaction(token:ERC20Token, transaction:Transaction):
+    if(transaction.senderInitBalance > transaction.transactedQntAmount):
+        transaction.verified = True
+        print("Verified transaction: \n" + str(transaction))
+        DoTransaction(token, transaction)
+        
+    else:
+        print("Could not verify transaction!" + str(transaction))
+
+    
+# Perform the transaction
+def DoTransaction(token:ERC20Token, transaction:Transaction): 
+    # Get the address objects for sender and receiver
+    try:
+        #sender = GetWalletFromAddress(transaction.senderAddressId)
+        #receiver = GetWalletFromAddress(transaction.receiverAddressId)
+        token.allAddressDict[transaction.senderAddressId].balance = transaction.senderInitBalance - transaction.transactedQntAmount
+        token.allAddressDict[transaction.receiverAddressId].balance = transaction.receiverInitBalanace + transaction.transactedQntAmount
+        
+    except:
+        print("Could not get address objects! \n Sender: " + transaction.senderAddressId + "\nReceiver: " + transaction.senderAddressId)
+    
+    # Perform the transaction
+    #sender.balance -= transaction.transactedQntAmount
+    #receiver.balance += transaction.transactedQntAmount
+
+    print("Completed transaction: \n" + str(transaction))
+
+
+
 
 
 # ======================================================== #
@@ -118,24 +205,60 @@ class Address():
 
 
 # Get the address object corresponding to the given address ID 
-def GetAddressObject(token:ERC20Token, address:str or Address):
-    if(isinstance(address, Address)):
-        return address
-    if(isinstance(address, str)):
+def GetAddressObject(token:ERC20Token, addressId:str or Address):
+    # Check if already an address
+    if(isinstance(addressId, Address)):
+        return addressId
+    # Ensure addressId str contains no prefix of address type
+    if('_' in addressId):
+        addressId = addressId.split("_")[-1]
+    
+    if(isinstance(addressId, str)):
         try:
-            return token.allAddressDict[address]
+            return token.allAddressDict[addressId]
         except:
-            print("Address could not be found! " + address)
+            print("Address could not be found! " + addressId)
             return None
+
+
+def GetWalletFromAddress(token, address):
+    # Get the address objects for sender and receiver
+    try:
+        addressObject = GetAddressObject(token, address)
+        
+        # Ensure address object is of type "wallet" 
+        if(addressObject.type.lower().strip() != "wallet"):
+            print("Address was not a wallet, aborting! \n Address type: " + addressObject.type)
+            return None
+        # Return the wallet (address object)
+        return addressObject
+    except:
+        print("Could not get address object! \n Address: " + addressObject)
+        return None
+
 
 
 # Used to generate random address IDs 
 def GenerateRandomAddressID(token:ERC20Token):
-    id = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(token.address))
+    id = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(token.addressLength))
     # Ensure id has not already been created
-    if(id in token.allAddresses):
+    if(id in list(token.allAddressDict.keys())):
         # Generate a new random address
         GenerateRandomAddressID(token)
     else:
         return id
+
+# Used to generate random transaction IDs 
+def GenerateRandomTransactionID(token:ERC20Token):
+    id = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(token.transactionIdLength))
+    # Ensure id has not already been created
+    if(id in token.allTransactions):
+        # Generate a new random ID
+        GenerateRandomTransactionID(token)
+    else:
+        return id
+
+
+
+
 
