@@ -1,5 +1,5 @@
 # ERC20_PythonTemplate
-This repository contains a simple python implementation of the ERC-20 protocol. I use this as a scaffolding for quickly prototyping ideas for new tokens. 
+This repository contains a python implementation of a simple blockchain/address/transaction structure that is loosely based on the ERC-20 protocol. I use this as a scaffolding for quickly prototyping ideas for new tokens. 
 
 This does not implement a blockchain, but simply stores addresses and transactions in memory (that do not persist). In future I plan to create a simulated persistant blockchain for more in depth prototyping, but this template is simply meant to function as a test platform for minting and transacting tokens between addresses.  
 
@@ -36,5 +36,13 @@ Key points:
 - Each address has a designated type ('wallet' or 'contract' - contracts are not yet implemented).
 
 ## Creating Transactions
+
+Transactions are split into these stages 
+1. Request transaction (unverified transaction created)
+1. Transaction verified (simple implementation checks balance is sufficient - more complex verification possible at this stage (such as checking signed ownership of addresses))
+1. Transaction performed if verified (balance transferred from sender to receiver)
+
+
+
 
 

@@ -5,7 +5,7 @@ def main():
     print("Main")
 
     # Create the ERC-20 token model
-    token = ERC20Token("token", "TKN", decimals=8, quanta="qt", totalSupply=1e9, addressLength=8)
+    token = ERC20Token("token", "TKN", decimals=8, quanta="qt", totalSymbolSupply=1e9, addressLength=8)
 
     CreateNumWalletAddresses(token, 5)
 
